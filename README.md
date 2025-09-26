@@ -1,8 +1,7 @@
 # PyCodeDictionary ©️2025 KisaragiIchigo
 
 ## Download
-[https://github.com/KisaragiIchigo/PyCodeDictionary/releases/tag/v0.1.0](https://graphviz.org](https://github.com/KisaragiIchigo/PyCodeDictionary/releases/tag/v0.1.0) 
-
+[https://github.com/KisaragiIchigo/PyCodeDictionary/releases/tag/v0.1.0]
 
 ## ツール概要
 
