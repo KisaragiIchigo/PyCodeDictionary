@@ -1,0 +1,8 @@
+pyinstaller --noconsole ^
+  --onefile ^
+  --clean ^
+  --name PyCodeDictionary ^
+  --icon assets\pydic.ico ^
+  --add-data "assets\graphviz\win;assets\graphviz\win" ^
+  --hidden-import PySide6.QtSvgWidgets ^
+  PyCodeDictionary.py
