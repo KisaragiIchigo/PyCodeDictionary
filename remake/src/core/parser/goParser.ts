@@ -1,6 +1,6 @@
 import { SymbolNode, CallEdge, PatternTag, ImportEntry } from '../../types';
 
-interface RawRustFunc {
+interface RawGoFunc {
   id: string;
   name: string;
   kind: 'function' | 'method';
@@ -15,18 +15,16 @@ interface RawRustFunc {
   calls: string[];
 }
 
-export function parseRustCode(code: string): {
+export function parseGoCode(code: string): {
   symbols: SymbolNode[];
   callEdges: CallEdge[];
   imports: ImportEntry[];
 } {
   const lines = code.split('\n');
   const symbols: SymbolNode[] = [];
-  const rawFuncs: RawRustFunc[] = [];
+  const rawFuncs: RawGoFunc[] = [];
   const imports: ImportEntry[] = [];
 
-  let currentImpl: string | null = null;
-  let currentTrait: string | null = null;
   let accumulatedDoc: string | undefined = undefined;
 
   for (let i = 0; i < lines.length; i++) {
@@ -35,34 +33,54 @@ export function parseRustCode(code: string): {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    // Doc コメント (/// ...)
-    if (trimmed.startsWith('///')) {
-      const doc = trimmed.replace(/^\/\/\/\s*/, '');
+    // Doc コメント
+    if (trimmed.startsWith('//')) {
+      const doc = trimmed.replace(/^\/\/\s*/, '');
       accumulatedDoc = accumulatedDoc ? `${accumulatedDoc} ${doc}` : doc;
       continue;
     }
 
-    // use 文の抽出 (use std::fs::File; use crate::foo::bar;)
-    const useMatch = trimmed.match(/^use\s+([A-Za-z0-9_:]+(?:\{.*?\})?);/);
-    if (useMatch) {
-      const source = useMatch[1];
-      imports.push({
-        source,
-        symbols: [source.split('::').pop() || source],
-        isStandardLib: source.startsWith('std::') || source.startsWith('core::') || source.startsWith('alloc::'),
-        line: lineNum
-      });
+    // import の抽出 (import "fmt", import ( "net/http" ... ))
+    if (trimmed.startsWith('import (')) {
+      for (let k = i + 1; k < lines.length; k++) {
+        const impLine = lines[k].trim();
+        if (impLine === ')') {
+          i = k;
+          break;
+        }
+        const pkgMatch = impLine.match(/["']([^'"]+)["']/);
+        if (pkgMatch) {
+          const pkg = pkgMatch[1];
+          imports.push({
+            source: pkg,
+            symbols: [pkg.split('/').pop() || pkg],
+            isStandardLib: !pkg.includes('.'),
+            line: k + 1
+          });
+        }
+      }
+      continue;
+    } else if (trimmed.startsWith('import ')) {
+      const pkgMatch = trimmed.match(/import\s+["']([^'"]+)["']/);
+      if (pkgMatch) {
+        const pkg = pkgMatch[1];
+        imports.push({
+          source: pkg,
+          symbols: [pkg.split('/').pop() || pkg],
+          isStandardLib: !pkg.includes('.'),
+          line: lineNum
+        });
+      }
       continue;
     }
 
-    // Trait 定義 (pub trait MyTrait { ... })
-    const traitMatch = trimmed.match(/(?:pub\s+)?trait\s+([A-Za-z0-9_]+)/);
-    if (traitMatch) {
-      currentTrait = traitMatch[1];
+    // Struct / Interface
+    const typeMatch = line.match(/^type\s+([A-Za-z0-9_]+)\s+(struct|interface)/);
+    if (typeMatch) {
       symbols.push({
-        id: `trait-${traitMatch[1]}`,
-        name: traitMatch[1],
-        kind: 'interface',
+        id: `type-${typeMatch[1]}`,
+        name: typeMatch[1],
+        kind: typeMatch[2] === 'struct' ? 'struct' : 'interface',
         startLine: lineNum,
         endLine: lineNum,
         docstring: accumulatedDoc,
@@ -73,58 +91,32 @@ export function parseRustCode(code: string): {
       continue;
     }
 
-    // Struct 定義 (pub struct MyStruct { ... })
-    const structMatch = trimmed.match(/(?:pub\s+)?struct\s+([A-Za-z0-9_]+)/);
-    if (structMatch) {
-      symbols.push({
-        id: `struct-${structMatch[1]}`,
-        name: structMatch[1],
-        kind: 'struct',
-        startLine: lineNum,
-        endLine: lineNum,
-        docstring: accumulatedDoc,
-        tags: [],
-        calls: []
-      });
-      accumulatedDoc = undefined;
-      continue;
+    // Function / Method
+    const methodMatch = line.match(/^func\s+\((?:.*?\s+)?\*?([A-Za-z0-9_]+)\)\s+([A-Za-z0-9_]+)\s*\((.*?)\)(?:\s*(.*?))?\s*\{/);
+    const funcMatch = line.match(/^func\s+([A-Za-z0-9_]+)\s*\((.*?)\)(?:\s*(.*?))?\s*\{/);
+
+    let isFunc = false;
+    let funcName = '';
+    let receiverName: string | undefined = undefined;
+    let paramsRaw = '';
+    let returnType: string | undefined = undefined;
+
+    if (methodMatch) {
+      isFunc = true;
+      receiverName = methodMatch[1];
+      funcName = methodMatch[2];
+      paramsRaw = methodMatch[3];
+      returnType = methodMatch[4]?.trim();
+    } else if (funcMatch) {
+      isFunc = true;
+      funcName = funcMatch[1];
+      paramsRaw = funcMatch[2];
+      returnType = funcMatch[3]?.trim();
     }
 
-    // Enum 定義 (pub enum MyEnum { ... })
-    const enumMatch = trimmed.match(/(?:pub\s+)?enum\s+([A-Za-z0-9_]+)/);
-    if (enumMatch) {
-      symbols.push({
-        id: `enum-${enumMatch[1]}`,
-        name: enumMatch[1],
-        kind: 'enum',
-        startLine: lineNum,
-        endLine: lineNum,
-        docstring: accumulatedDoc,
-        tags: [],
-        calls: []
-      });
-      accumulatedDoc = undefined;
-      continue;
-    }
-
-    // Impl block (impl MyStruct or impl MyTrait for MyStruct)
-    const implMatch = trimmed.match(/impl(?:<.*?>)?\s+(?:([A-Za-z0-9_]+)\s+for\s+)?([A-Za-z0-9_]+)/);
-    if (implMatch) {
-      currentImpl = implMatch[2];
-    }
-
-    // Function / Method (fn my_func<T>(...) -> ReturnType { ... })
-    const fnMatch = line.match(/(?:pub(?:\(.*?\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern(?:\s+".*?")?\s+)?fn\s+([A-Za-z0-9_]+)\s*(?:<.*?>)?\s*\((.*?)\)(?:\s*->\s*([^{;]+))?/);
-    if (fnMatch) {
-      const isAsync = line.includes('async fn');
-      const isUnsafe = line.includes('unsafe fn');
-      const fnName = fnMatch[1];
-      const paramsRaw = fnMatch[2];
-      const returnType = fnMatch[3]?.trim();
-      const isMethod = currentImpl !== null && (paramsRaw.includes('self') || paramsRaw.includes('&self') || paramsRaw.includes('&mut self'));
-
+    if (isFunc && funcName) {
       const params = paramsRaw.split(',').map(p => p.trim()).filter(Boolean);
-      const symbolId = isMethod && currentImpl ? `${currentImpl}::${fnName}` : fnName;
+      const symbolId = receiverName ? `${receiverName}.${funcName}` : funcName;
 
       let endLine = lineNum;
       const bodyLines: string[] = [];
@@ -151,22 +143,21 @@ export function parseRustCode(code: string): {
 
       const bodyCode = bodyLines.join('\n');
       const tags: PatternTag[] = [];
-      if (isAsync) tags.push('async');
-      if (isUnsafe) tags.push('unsafe');
+      if (/go\s+func|go\s+[A-Za-z0-9_]+/.test(bodyCode)) tags.push('async');
 
-      if (/File::|std::fs|read_to_string|write_all|TcpStream|reqwest|tokio::fs|tokio::net/.test(bodyCode)) {
-        tags.push(/reqwest|TcpStream|http|tokio::net/.test(bodyCode) ? 'net' : 'io');
+      if (/os\.Open|os\.ReadFile|io\.|bufio|http\.Get|http\.Post|net\.Dial|http\.HandleFunc/.test(bodyCode)) {
+        tags.push(/http\.|net\./.test(bodyCode) ? 'net' : 'io');
       }
 
-      if (new RegExp(`\\b${fnName}\\s*\\(`).test(bodyCode)) {
+      if (new RegExp(`\\b${funcName}\\s*\\(`).test(bodyCode)) {
         tags.push('recursive');
       }
 
       rawFuncs.push({
         id: symbolId,
-        name: isMethod && currentImpl ? `${currentImpl}::${fnName}` : fnName,
-        kind: isMethod ? 'method' : 'function',
-        parentName: isMethod && currentImpl ? currentImpl : undefined,
+        name: receiverName ? `${receiverName}.${funcName}` : funcName,
+        kind: receiverName ? 'method' : 'function',
+        parentName: receiverName,
         startLine: lineNum,
         endLine,
         params,
@@ -184,7 +175,7 @@ export function parseRustCode(code: string): {
   // 呼び出し関係の解決
   const shortNamesToFull = new Map<string, string[]>();
   for (const f of rawFuncs) {
-    const short = f.name.includes('::') ? f.name.split('::').pop()! : f.name;
+    const short = f.name.includes('.') ? f.name.split('.').pop()! : f.name;
     const list = shortNamesToFull.get(short) || [];
     list.push(f.name);
     shortNamesToFull.set(short, list);
@@ -200,7 +191,7 @@ export function parseRustCode(code: string): {
       const curLineNum = caller.startLine + idx;
 
       for (const [shortName, fullNames] of shortNamesToFull.entries()) {
-        const callRegex = new RegExp(`(?:self\\.|Self::|\\b)${shortName}\\s*\\(`, 'g');
+        const callRegex = new RegExp(`(?:\\b)${shortName}\\s*\\(`, 'g');
         if (callRegex.test(curLineText)) {
           for (const targetFullName of fullNames) {
             if (!caller.calls.includes(targetFullName)) {

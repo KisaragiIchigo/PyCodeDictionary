@@ -1,6 +1,6 @@
 import { SymbolNode, CallEdge, PatternTag, ImportEntry } from '../../types';
 
-interface RawRustFunc {
+interface RawCppFunc {
   id: string;
   name: string;
   kind: 'function' | 'method';
@@ -15,18 +15,18 @@ interface RawRustFunc {
   calls: string[];
 }
 
-export function parseRustCode(code: string): {
+export function parseCppCode(code: string): {
   symbols: SymbolNode[];
   callEdges: CallEdge[];
   imports: ImportEntry[];
 } {
   const lines = code.split('\n');
   const symbols: SymbolNode[] = [];
-  const rawFuncs: RawRustFunc[] = [];
+  const rawFuncs: RawCppFunc[] = [];
   const imports: ImportEntry[] = [];
 
-  let currentImpl: string | null = null;
-  let currentTrait: string | null = null;
+  let currentClass: string | null = null;
+  let currentNamespace: string | null = null;
   let accumulatedDoc: string | undefined = undefined;
 
   for (let i = 0; i < lines.length; i++) {
@@ -35,37 +35,49 @@ export function parseRustCode(code: string): {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    // Doc コメント (/// ...)
-    if (trimmed.startsWith('///')) {
-      const doc = trimmed.replace(/^\/\/\/\s*/, '');
+    // コメント (// ... または /* ... */)
+    if (trimmed.startsWith('//')) {
+      const doc = trimmed.replace(/^\/\/\s*/, '');
       accumulatedDoc = accumulatedDoc ? `${accumulatedDoc} ${doc}` : doc;
       continue;
     }
 
-    // use 文の抽出 (use std::fs::File; use crate::foo::bar;)
-    const useMatch = trimmed.match(/^use\s+([A-Za-z0-9_:]+(?:\{.*?\})?);/);
-    if (useMatch) {
-      const source = useMatch[1];
+    // #include の抽出 (#include <iostream>, #include "my_header.h")
+    const incMatch = trimmed.match(/^#include\s+([<"][^>"]+[>"])/);
+    if (incMatch) {
+      const header = incMatch[1];
+      const isStd = header.startsWith('<');
+      const cleanHeader = header.replace(/[<>"]/g, '');
       imports.push({
-        source,
-        symbols: [source.split('::').pop() || source],
-        isStandardLib: source.startsWith('std::') || source.startsWith('core::') || source.startsWith('alloc::'),
+        source: cleanHeader,
+        symbols: [cleanHeader.split('/').pop() || cleanHeader],
+        isStandardLib: isStd,
         line: lineNum
       });
       continue;
     }
 
-    // Trait 定義 (pub trait MyTrait { ... })
-    const traitMatch = trimmed.match(/(?:pub\s+)?trait\s+([A-Za-z0-9_]+)/);
-    if (traitMatch) {
-      currentTrait = traitMatch[1];
+    // namespace
+    const nsMatch = trimmed.match(/^namespace\s+([A-Za-z0-9_]+)/);
+    if (nsMatch) {
+      currentNamespace = nsMatch[1];
+    }
+
+    // Class / Struct
+    const classMatch = trimmed.match(/^(?:template\s*<.*?>\s*)?(?:class|struct)\s+([A-Za-z0-9_]+)(?:\s*:\s*(?:public|private|protected)\s+([A-Za-z0-9_]+))?/);
+    if (classMatch && !trimmed.endsWith(';')) {
+      const className = classMatch[1];
+      const baseClass = classMatch[2];
+      currentClass = className;
+
       symbols.push({
-        id: `trait-${traitMatch[1]}`,
-        name: traitMatch[1],
-        kind: 'interface',
+        id: `class-${className}`,
+        name: currentNamespace ? `${currentNamespace}::${className}` : className,
+        kind: 'class',
         startLine: lineNum,
         endLine: lineNum,
         docstring: accumulatedDoc,
+        extendsClasses: baseClass ? [baseClass] : [],
         tags: [],
         calls: []
       });
@@ -73,58 +85,21 @@ export function parseRustCode(code: string): {
       continue;
     }
 
-    // Struct 定義 (pub struct MyStruct { ... })
-    const structMatch = trimmed.match(/(?:pub\s+)?struct\s+([A-Za-z0-9_]+)/);
-    if (structMatch) {
-      symbols.push({
-        id: `struct-${structMatch[1]}`,
-        name: structMatch[1],
-        kind: 'struct',
-        startLine: lineNum,
-        endLine: lineNum,
-        docstring: accumulatedDoc,
-        tags: [],
-        calls: []
-      });
-      accumulatedDoc = undefined;
-      continue;
-    }
-
-    // Enum 定義 (pub enum MyEnum { ... })
-    const enumMatch = trimmed.match(/(?:pub\s+)?enum\s+([A-Za-z0-9_]+)/);
-    if (enumMatch) {
-      symbols.push({
-        id: `enum-${enumMatch[1]}`,
-        name: enumMatch[1],
-        kind: 'enum',
-        startLine: lineNum,
-        endLine: lineNum,
-        docstring: accumulatedDoc,
-        tags: [],
-        calls: []
-      });
-      accumulatedDoc = undefined;
-      continue;
-    }
-
-    // Impl block (impl MyStruct or impl MyTrait for MyStruct)
-    const implMatch = trimmed.match(/impl(?:<.*?>)?\s+(?:([A-Za-z0-9_]+)\s+for\s+)?([A-Za-z0-9_]+)/);
-    if (implMatch) {
-      currentImpl = implMatch[2];
-    }
-
-    // Function / Method (fn my_func<T>(...) -> ReturnType { ... })
-    const fnMatch = line.match(/(?:pub(?:\(.*?\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern(?:\s+".*?")?\s+)?fn\s+([A-Za-z0-9_]+)\s*(?:<.*?>)?\s*\((.*?)\)(?:\s*->\s*([^{;]+))?/);
+    // Function / Method (auto my_func(...) -> void, void MyClass::method(...), int func(...))
+    const fnMatch = line.match(/(?:template\s*<.*?>\s*)?(?:(?:static|inline|virtual|explicit|friend|const|constexpr)\s+)*([A-Za-z0-9_:<>&*]+)\s+([A-Za-z0-9_:]+)\s*\((.*?)\)(?:\s*const)?(?:\s*noexcept)?(?:\s*override)?(?:\s*->\s*[^{;]+)?\s*\{/);
     if (fnMatch) {
-      const isAsync = line.includes('async fn');
-      const isUnsafe = line.includes('unsafe fn');
-      const fnName = fnMatch[1];
-      const paramsRaw = fnMatch[2];
-      const returnType = fnMatch[3]?.trim();
-      const isMethod = currentImpl !== null && (paramsRaw.includes('self') || paramsRaw.includes('&self') || paramsRaw.includes('&mut self'));
+      const returnType = fnMatch[1];
+      const fullFnName = fnMatch[2];
+      const paramsRaw = fnMatch[3];
 
+      if (['if', 'for', 'while', 'switch', 'catch'].includes(fullFnName)) {
+        continue;
+      }
+
+      const isMethod = fullFnName.includes('::') || currentClass !== null;
+      const fnName = fullFnName;
       const params = paramsRaw.split(',').map(p => p.trim()).filter(Boolean);
-      const symbolId = isMethod && currentImpl ? `${currentImpl}::${fnName}` : fnName;
+      const symbolId = fnName;
 
       let endLine = lineNum;
       const bodyLines: string[] = [];
@@ -151,22 +126,22 @@ export function parseRustCode(code: string): {
 
       const bodyCode = bodyLines.join('\n');
       const tags: PatternTag[] = [];
-      if (isAsync) tags.push('async');
-      if (isUnsafe) tags.push('unsafe');
+      if (/std::async|std::thread|std::future|pthread_create/.test(bodyCode)) tags.push('async');
 
-      if (/File::|std::fs|read_to_string|write_all|TcpStream|reqwest|tokio::fs|tokio::net/.test(bodyCode)) {
-        tags.push(/reqwest|TcpStream|http|tokio::net/.test(bodyCode) ? 'net' : 'io');
+      if (/std::ifstream|std::ofstream|std::fstream|std::cout|printf|fopen|socket|curl|boost::asio/.test(bodyCode)) {
+        tags.push(/socket|curl|boost::asio|http/.test(bodyCode) ? 'net' : 'io');
       }
 
-      if (new RegExp(`\\b${fnName}\\s*\\(`).test(bodyCode)) {
+      const baseName = fnName.includes('::') ? fnName.split('::').pop()! : fnName;
+      if (new RegExp(`\\b${baseName}\\s*\\(`).test(bodyCode)) {
         tags.push('recursive');
       }
 
       rawFuncs.push({
         id: symbolId,
-        name: isMethod && currentImpl ? `${currentImpl}::${fnName}` : fnName,
+        name: fnName,
         kind: isMethod ? 'method' : 'function',
-        parentName: isMethod && currentImpl ? currentImpl : undefined,
+        parentName: fullFnName.includes('::') ? fullFnName.split('::')[0] : (currentClass || undefined),
         startLine: lineNum,
         endLine,
         params,
@@ -200,7 +175,7 @@ export function parseRustCode(code: string): {
       const curLineNum = caller.startLine + idx;
 
       for (const [shortName, fullNames] of shortNamesToFull.entries()) {
-        const callRegex = new RegExp(`(?:self\\.|Self::|\\b)${shortName}\\s*\\(`, 'g');
+        const callRegex = new RegExp(`(?:this->|\\b)${shortName}\\s*\\(`, 'g');
         if (callRegex.test(curLineText)) {
           for (const targetFullName of fullNames) {
             if (!caller.calls.includes(targetFullName)) {

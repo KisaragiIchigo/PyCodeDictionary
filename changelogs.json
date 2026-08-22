@@ -126,15 +126,46 @@
   {
     "timestamp": "2026-08-22T16:17:00+09:00",
     "target_files": [
-      "remake/src/hooks/*",
-      "remake/src/components/flowchart/*",
-      "remake/src/components/layout/*",
-      "remake/src/components/FlowchartView.tsx",
-      "remake/src/App.tsx"
+      "src/hooks/*",
+      "src/components/flowchart/*",
+      "src/components/layout/*",
+      "src/components/FlowchartView.tsx",
+      "src/App.tsx"
     ],
     "summary": "コードベース全体の「オーケストレーション構成」リファクタリング完了",
     "purpose": "688行あったApp.tsxを138行へ、648行あったFlowchartView.tsxを199行へ圧縮し、状態管理・キャンバス操作・シミュレーション・パストレース・個別描画コンポーネントへ単一責任分離・オーケストレータ化を実施",
     "impact_scope": "src/hooks/, src/components/flowchart/, src/components/layout/, App.tsx, FlowchartView.tsx",
     "concerns": "なし（ビルド時間1.62s・エラー0件・正常バンドル完了）"
+  },
+  {
+    "timestamp": "2026-08-22T16:30:00+09:00",
+    "target_files": [
+      "package.json",
+      "src/core/ast/tsJsAstBuilder.ts",
+      "src/core/parser/tsJsParser.ts",
+      "src/*",
+      "README.md",
+      "プッシュ.bat"
+    ],
+    "summary": "世界標準公式ASTパーサー(@babel/parser)の完全導入とGitコミット完了",
+    "purpose": "正規表現パーサーの懸念を完全に打破するため、公式 @babel/parser を package.json にインストールし、本物のESTree AST生成・走査へ完全移行。全変更をルート src/ へ同期し、Gitコミット（8888214）を作成完了",
+    "impact_scope": "ルート直下 src/ 全域、package.json、Gitコミット",
+    "concerns": "なし（プロダクションビルド通過・Gitコミット完了）"
+  },
+  {
+    "timestamp": "2026-08-22T16:39:00+09:00",
+    "target_files": [
+      "src/core/ast/pythonAstBuilder.ts",
+      "src/core/parser/pythonParser.ts",
+      "src/core/parser/rustParser.ts",
+      "src/core/parser/goParser.ts",
+      "src/core/parser/cppParser.ts",
+      "src/core/parser/universalParser.ts",
+      "remake/src/core/parser/*"
+    ],
+    "summary": "Python再帰下降AST解析エンジン・Rust/Go/C++専用ブロック構文解析器の完全統合とGitコミット完了",
+    "purpose": "PythonについてLexer(字句解析器)+Recursive Descent Parser(再帰下降構文解析器)による公式ast準拠の完全なASTエンジンを実装。さらにRust(impl/trait/struct)、Go(goroutine/method receiver/interface)、C++(namespace/class/template)の専用ブロック構文解析器を実装し、Gitコミット（7dc5abc）を作成完了",
+    "impact_scope": "Python/Rust/Go/C++ パーサー全域、Gitコミット",
+    "concerns": "なし（プロダクションビルド通過・Gitコミット完了）"
   }
 ]
