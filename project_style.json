@@ -1,0 +1,134 @@
+{
+  "meta": {
+    "project_name": "CodeDictionary Studio",
+    "version": "2.0.0",
+    "author": "KisaragiIchigo & Wiz",
+    "description": "多言語対応・超高速DAGコールグラフ・インテリジェントコード辞書・品質診断を備えた次世代コード解析スタジオ"
+  },
+  "stack": {
+    "framework": "React 18",
+    "bundler": "Vite",
+    "language": "TypeScript",
+    "styling": "Tailwind CSS v3",
+    "motion": "Framer Motion",
+    "icons": "Lucide React",
+    "ui_primitives": "Radix UI"
+  },
+  "palette": {
+    "background": {
+      "base": "#0B0F19",
+      "surface": "#111827",
+      "surface_elevated": "#1A2234",
+      "surface_glass": "rgba(17, 24, 39, 0.75)",
+      "overlay": "rgba(5, 8, 15, 0.6)"
+    },
+    "text": {
+      "primary": "#F1F5F9",
+      "secondary": "#94A3B8",
+      "muted": "#64748B",
+      "inverse": "#0F172A"
+    },
+    "accent": {
+      "primary": "#06B6D4",
+      "primary_glow": "rgba(6, 182, 212, 0.25)",
+      "secondary": "#10B981",
+      "secondary_glow": "rgba(16, 185, 129, 0.25)",
+      "violet": "#8B5CF6",
+      "amber": "#F59E0B",
+      "rose": "#F43F5E"
+    },
+    "node_tags": {
+      "async": {
+        "bg": "rgba(139, 92, 246, 0.15)",
+        "border": "#8B5CF6",
+        "text": "#C4B5FD"
+      },
+      "io": {
+        "bg": "rgba(245, 158, 11, 0.15)",
+        "border": "#F59E0B",
+        "text": "#FCD34D"
+      },
+      "net": {
+        "bg": "rgba(6, 182, 212, 0.15)",
+        "border": "#06B6D4",
+        "text": "#67E8F9"
+      },
+      "recursive": {
+        "bg": "rgba(244, 63, 94, 0.15)",
+        "border": "#F43F5E",
+        "text": "#FDA4AF"
+      },
+      "standard": {
+        "bg": "rgba(30, 41, 59, 0.6)",
+        "border": "#334155",
+        "text": "#E2E8F0"
+      }
+    },
+    "border": {
+      "subtle": "rgba(255, 255, 255, 0.07)",
+      "medium": "rgba(255, 255, 255, 0.12)",
+      "accent": "rgba(6, 182, 212, 0.4)"
+    }
+  },
+  "typography": {
+    "font_family": {
+      "ui": "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', sans-serif",
+      "code": "'JetBrains Mono', 'Fira Code', Consolas, monospace"
+    },
+    "font_size": {
+      "xs": "11px",
+      "sm": "12px",
+      "base": "13px",
+      "md": "14px",
+      "lg": "16px",
+      "xl": "18px",
+      "2xl": "22px"
+    },
+    "font_weight": {
+      "normal": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    }
+  },
+  "texture": {
+    "acrylic_blur": "backdrop-blur-md",
+    "glass_panel": "bg-[#111827]/80 backdrop-blur-md border border-white/[0.08] shadow-2xl shadow-black/50",
+    "glow_cyan": "0 0 20px -5px rgba(6, 182, 212, 0.4)",
+    "glow_emerald": "0 0 20px -5px rgba(16, 185, 129, 0.4)"
+  },
+  "density": {
+    "header_height": "52px",
+    "panel_padding": "12px",
+    "gutter_width": "48px",
+    "node_min_width": "180px",
+    "node_height": "64px"
+  },
+  "motion": {
+    "transition_fast": "150ms cubic-bezier(0.16, 1, 0.3, 1)",
+    "transition_smooth": "240ms cubic-bezier(0.16, 1, 0.3, 1)",
+    "scale_hover": 1.02
+  },
+  "zindex": {
+    "base": 0,
+    "canvas": 10,
+    "panel": 20,
+    "header": 30,
+    "dropdown": 40,
+    "modal": 50,
+    "tooltip": 60
+  },
+  "forbidden": [
+    "Inter / Roboto / Arial / Outfit / OSデフォルトフォント単体の無個性利用",
+    "白背景上の紫グラデーション",
+    "太いベタ塗りグレーボーダー",
+    "無意味に広すぎる余白や無駄なスクロール領域",
+    "プレースホルダーコメント（TODO等の放置）",
+    "外部Graphviz CLIへの絶対依存（ブラウザ完結を優先）"
+  ],
+  "app_text_tone": {
+    "system_locale": "ja-JP",
+    "dialog_style": "です・ます調（セミフォーマルで明瞭）",
+    "terminology": "標準的なソフトウェアエンジニアリング用語"
+  }
+}

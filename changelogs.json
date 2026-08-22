@@ -1,0 +1,184 @@
+[
+  {
+    "timestamp": "2026-08-21T10:33:00+09:00",
+    "target_files": [
+      "project_style.json",
+      "changelogs.json",
+      "remake/*",
+      "README.md",
+      "コンパイル.bat",
+      "起動.bat"
+    ],
+    "summary": "PyDicの次世代多言語対応リメイク版『CodeDictionary Studio』の新規設計と構築開始",
+    "purpose": "Python実行や外部Graphviz依存から脱却し、多言語対応・自律DAGコールグラフ・インテリジェントコード辞書・品質診断・プロフェッショナルUIを提供するWeb/デスクトップ対応アプリをremake/配下に実装",
+    "impact_scope": "remake/ フォルダ配下の新規構築、ルートの起動/ビルド用バッチファイル作成",
+    "concerns": "各種言語パーサーの網羅性と、大規模コードにおけるクライアントサイド描画パフォーマンスの最適化"
+  },
+  {
+    "timestamp": "2026-08-21T10:41:00+09:00",
+    "target_files": [
+      "remake/src/core/parser/*",
+      "remake/src/core/dictionary/*",
+      "remake/src/core/metrics/*",
+      "remake/src/core/graph/*",
+      "remake/src/core/presets/*",
+      "remake/src/components/*",
+      "remake/src/App.tsx",
+      "remake/起動.bat",
+      "remake/コンパイル.bat",
+      "起動.bat",
+      "コンパイル.bat",
+      "README.md"
+    ],
+    "summary": "CodeDictionary Studio (PyDic v2.0) の全コンポーネント実装完了とプロダクションビルド検証完了",
+    "purpose": "多言語ユニバーサル解析エンジン、自律型DAGコールグラフ、言語別コード辞書、循環的複雑度/メトリクス計算、リファクタリング提案、プロ用エディタ、エクスポート機能の完全実装と、ワンクリック起動・コンパイル用バッチファイルの提供",
+    "impact_scope": "remake/ 配下の完全構築およびビルド成果物 dist/ の生成確認",
+    "concerns": "なし（ビルドエラー0件・正常バンドル完了）"
+  },
+  {
+    "timestamp": "2026-08-21T10:45:00+09:00",
+    "target_files": [
+      "remake/src/types/index.ts",
+      "remake/src/core/parser/*",
+      "remake/src/core/metrics/securityScanner.ts",
+      "remake/src/core/metrics/cognitiveComplexity.ts",
+      "remake/src/core/graph/layoutEngine.ts",
+      "remake/src/components/FlowchartView.tsx",
+      "remake/src/components/QualityPanel.tsx",
+      "remake/src/core/graph/graphExporter.ts"
+    ],
+    "summary": "解析精度の劇的向上：クラスクラスタリング、上流/下流呼び出しパストレース、セキュリティ脆弱性スキャン、認知複雑度、docstring/JSDocホバーの統合",
+    "purpose": "パーサーの構文抽出精度を大幅に高め、セキュリティ診断・認知負荷診断・グラフの視認性をプロ水準へ強化",
+    "impact_scope": "パーサー、グラフエンジン、品質診断パネル、エクスポート機能の機能強化",
+    "concerns": "なし（ビルド通過確認済み）"
+  },
+  {
+    "timestamp": "2026-08-21T10:47:00+09:00",
+    "target_files": [
+      "remake/src/types/index.ts",
+      "remake/src/core/architecture/roleClassifier.ts",
+      "remake/src/core/architecture/cohesionAnalyzer.ts",
+      "remake/src/core/architecture/blueprintGenerator.ts",
+      "remake/src/core/analyzer.ts",
+      "remake/src/components/ArchitecturePanel.tsx",
+      "remake/src/components/FlowchartView.tsx",
+      "remake/src/App.tsx"
+    ],
+    "summary": "責務細分化 & オーケストレーション可視化・設計スタジオ機能の実装",
+    "purpose": "各関数のアーキテクチャ役割（Orchestrator, Pure Logic, I/O Effect, Validator, Mixed）の自動判定・色分け表示、単一責任（SRP）診断、および混在関数に対するオーケストレーション分解コード雛形（ブループリント）の自動生成機能を追加",
+    "impact_scope": "サイドバー新タブ「設計 & 責務」の追加、フローチャートへの役割バッジ表示",
+    "concerns": "なし（ビルド通過確認済み）"
+  },
+  {
+    "timestamp": "2026-08-21T10:50:00+09:00",
+    "target_files": [
+      "remake/src/core/multiFile/*",
+      "remake/src/components/ProjectExplorer.tsx",
+      "remake/src/components/ProjectMapView.tsx",
+      "remake/src/components/Header.tsx",
+      "remake/src/components/DictionaryPanel.tsx",
+      "remake/src/components/ArchitecturePanel.tsx",
+      "remake/src/App.tsx"
+    ],
+    "summary": "UI表記の標準化と、フォルダ一括検知・プロジェクト全体依存MAP・統合マスター辞書機能の実装",
+    "purpose": "UIから内輪用語を完全に排除して標準工学用語へ統一し、フォルダ全体の複数コードファイルを一括スキャンしてプロジェクト依存MAPと全ファイル統合マスター辞書を構築・閲覧できるように拡張",
+    "impact_scope": "フォルダ選択・D&D一括解析、ProjectMapView、ProjectExplorer、統合辞書",
+    "concerns": "なし（ビルド通過確認済み）"
+  },
+  {
+    "timestamp": "2026-08-21T10:55:00+09:00",
+    "target_files": [
+      "remake/src/App.tsx"
+    ],
+    "summary": "エディタ vs MAP の自由ドラッグリサイズスプリッター & 比率プリセットの実装",
+    "purpose": "エディタ領域とMAP領域の間の境界線をマウスドラッグで自由自在に伸縮できるようにし、3:7 / 5:5 / 7:3 のクイック比率プリセットやダブルクリックによる5:5リセット機能を追加",
+    "impact_scope": "App.tsx (Main Workspace Resizer)",
+    "concerns": "なし（ビルド通過確認済み）"
+  },
+  {
+    "timestamp": "2026-08-21T11:55:00+09:00",
+    "target_files": [
+      "electron/main.ts",
+      "electron/preload.ts",
+      "src/types/electron.d.ts",
+      "electron-builder.json5",
+      "package.json",
+      "vite.config.ts",
+      "tsconfig.json",
+      "コンパイル.bat",
+      "release/*",
+      "README.md",
+      "changelogs.json"
+    ],
+    "summary": "Electronデスクトップ化および release/ フォルダへの単独ポータブルEXE & インストーラー型EXE（NSIS）自動出力パイプラインの実装",
+    "purpose": "「コンパイル.bat」を実行することで、直下の release/ に「CodeDictionary Studio-Portable-2.0.0.exe」（単独起動型）と「CodeDictionary Studio-Setup-2.0.0.exe」（NSISインストーラー型）の両方を完全自動で生成・配置するビルド基盤を構築",
+    "impact_scope": "Electronメイン/プリロード実装、electron-builder統合、コンパイル.bat更新、releaseフォルダ出力",
+    "concerns": "なし（ポータブルEXE・インストーラーEXEともに生成と整合性を検証済み）"
+  },
+  {
+    "timestamp": "2026-08-22T09:03:00+09:00",
+    "target_files": [
+      "削除/*",
+      "src/*",
+      "electron/*",
+      "package.json",
+      "electron-builder.json5",
+      "コンパイル.bat",
+      "起動.bat",
+      "README.md",
+      "changelogs.json"
+    ],
+    "summary": "プロジェクト構造の正規化：旧作Python版の「削除/」フォルダ退避と、次世代リメイク版のプロジェクト直下への完全昇格",
+    "purpose": "旧作Pythonファイル群（PyCodeDictionary.py, gui.py, processor.py, assets等）をすべて新設の「削除/」フォルダへ退避し、remake/配下に構築されていたCodeDictionary Studioの全ファイルをルート直下に配置。設定パス（electron-builder.json5, main.ts, コンパイル.bat等）を直下向けに最適化",
+    "impact_scope": "プロジェクト全域のファイル配置構造再編、ビルドおよび起動バッチの直下動作対応",
+    "concerns": "なし（ルート直下でのTypeScript型チェック・Viteバンドル・Electronビルドの通過を検証済み）"
+  },
+  {
+    "timestamp": "2026-08-22T09:07:00+09:00",
+    "target_files": [
+      "src/types/index.ts",
+      "src/core/dictionary/interactiveRunner.ts",
+      "src/core/dictionary/interactiveData/*",
+      "src/components/dictionary/SyntaxAnatomy.tsx",
+      "src/components/dictionary/LivePlayground.tsx",
+      "src/components/dictionary/VisualConceptSim.tsx",
+      "src/components/dictionary/DictionaryQuiz.tsx",
+      "src/components/dictionary/InteractiveExplainer.tsx",
+      "src/components/DictionaryPanel.tsx",
+      "src/App.tsx",
+      "README.md",
+      "changelogs.json"
+    ],
+    "summary": "コード辞書「インタラクティブ解説ラボ」機能の実装（構文解剖・リアルタイム実行・動的シミュレータ・クイズ・エディタ挿入）",
+    "purpose": "静的な用語解説にとどまらず、トークンごとのホバー解剖（Syntax Anatomy）、ブラウザ内でのコード編集・即時実行（Live Playground）、async/awaitタイムラインやwithライフサイクルの動的図解（Visual Concept Simulator）、1タップ理解度クイズ、ワンクリックでのエディタ挿入機能を辞書パネルに完全統合",
+    "impact_scope": "辞書パネル、型定義、インタラクティブデータ、実行エンジン、エディタ連携",
+    "concerns": "なし（TypeScript型チェック・Viteバンドル通過確認済み）"
+  },
+  {
+    "timestamp": "2026-08-22T09:20:00+09:00",
+    "target_files": [
+      "src/components/FlowchartView.tsx",
+      "src/components/ProjectMapView.tsx",
+      "src/index.css",
+      "README.md",
+      "changelogs.json"
+    ],
+    "summary": "コールグラフ/ツリーMAPのインタラクティブズーム・視認性・データフロー可視化の劇的強化",
+    "purpose": "カーソル座標を中心とした滑らかな無段階ズーム（0.15倍〜3.5倍）、ノードダブルクリックによるターゲットフォーカスズーム、50%/100%/150%/Fitのクイックズームプリセット、エッジ上の動的データフロー光粒子アニメーション、インタラクティブ・レーダーミニマップ、高解像度ドットグリッド背景、役割別ネオングローを実装し、大規模コードでも一目で把握できるスタジオ水準の視認性を実現",
+    "impact_scope": "FlowchartView, ProjectMapView, index.css アニメーションキーフレーム",
+    "concerns": "なし（TypeScript型チェック・Viteバンドル通過確認済み）"
+  },
+  {
+    "timestamp": "2026-08-22T09:25:00+09:00",
+    "target_files": [
+      "src/components/FlowchartView.tsx",
+      "src/App.tsx",
+      "README.md",
+      "changelogs.json"
+    ],
+    "summary": "タイルクリックによるシネマティック補間ズームアニメーション（ぐーっと寄るカメラワーク）の完全実装",
+    "purpose": "ノードタイルを1回クリックした際に、requestAnimationFrame + Ease-Out Quartイージングにより、対象ノードが画面中央へ吸い付くように「ぐーっ」と滑らかにズームイン＆センタリングするシネマティックなカメラ補間アニメーションを実装。背景クリックやFitボタン時は全体へスムーズにズームアウト復帰し、エディタ/シンボルツリー選択とも完全連動",
+    "impact_scope": "FlowchartView カメラTweenエンジン、App.tsx targetLine連携",
+    "concerns": "なし（TypeScript型チェック・Viteバンドル通過確認済み）"
+  }
+]
