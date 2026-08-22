@@ -183,5 +183,20 @@
     "purpose": "GitHub/Neovim/Zed等で標準採用されている公式web-tree-sitterおよび各言語（Python, TS, JS, Rust, Go, C++, Shell, HTML, CSS, JSON）のWASMバイナリを完全統合。構文エラー耐性（Error-tolerant）を備えたプロ品質の多言語CST/AST解析を実現",
     "impact_scope": "コアAST解析エンジン、非同期高精度パース、public/tree-sitter/ WASMアセット",
     "concerns": "なし（プロダクションビルド通過・正常バンドル完了）"
+  },
+  {
+    "timestamp": "2026-08-22T19:53:00+09:00",
+    "target_files": [
+      "vite.config.ts",
+      "src/core/ast/symbolExtractor.ts",
+      "src/core/ast/treeSitterEngine.ts",
+      "src/core/analyzer.ts",
+      "src/main.tsx",
+      "src/test/treeSitter.test.ts"
+    ],
+    "summary": "Tree-sitter WASM動的コード分割・責務分離(symbolExtractor)・viteStaticCopy完全統合による起動耐障害性の強化",
+    "purpose": "ブラウザ静的モジュール解決時のクラッシュを動的インポートで完全解消し、SymbolExtractorクラスへの責務分離、viteStaticCopyによる確実なWASMアセット配置、および自動テストスイートを完全実装",
+    "impact_scope": "起動処理、Vite設定、パーサーモジュール分離、自動テスト",
+    "concerns": "なし（ビルド時間2.25s・正常バンドル完了）"
   }
 ]
