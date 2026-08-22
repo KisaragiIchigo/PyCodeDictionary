@@ -109,59 +109,6 @@ export interface DictOccurrence {
   preview: string;
 }
 
-export interface SyntaxToken {
-  text: string;
-  role?: string;
-  type?: string;
-  description?: string;
-  explanation?: string;
-  color?: string;
-}
-
-export interface SyntaxAnatomyData {
-  title: string;
-  code?: string;
-  codeTemplate?: string;
-  description?: string;
-  tokens: SyntaxToken[];
-  explanation?: string;
-}
-
-export interface VisualConceptData {
-  title: string;
-  type: string;
-  description: string;
-  defaultMode?: string;
-  modes?: any[];
-  steps?: {
-    label: string;
-    detail: string;
-    highlight?: boolean;
-    state?: string;
-  }[];
-}
-
-export interface QuizOption {
-  id?: string;
-  text: string;
-  isCorrect: boolean;
-  explanation: string;
-}
-
-export interface QuizItem {
-  question: string;
-  options: QuizOption[];
-  hint?: string;
-}
-
-export interface InteractiveExplanation {
-  anatomy?: SyntaxAnatomyData;
-  visualConcept?: VisualConceptData;
-  conceptSim?: VisualConceptData;
-  quiz?: QuizItem;
-  playgroundDefaultCode?: string;
-}
-
 export interface DictEntry {
   term: string;
   language: SupportedLanguage | 'all';
@@ -173,7 +120,6 @@ export interface DictEntry {
   definedInFile?: string;
   definedLine?: number;
   occurrences?: DictOccurrence[];
-  interactive?: InteractiveExplanation;
 }
 
 export interface QualityIssue {

@@ -67,7 +67,7 @@ export const DictionaryQuiz: React.FC<DictionaryQuizProps> = ({ quiz }) => {
               className={btnStyle}
             >
               <span className="shrink-0 font-mono text-[11px] px-1.5 py-0.2 rounded bg-white/[0.06] text-slate-400">
-                {option.id.toUpperCase()}
+                {option.id ? option.id.toUpperCase() : '•'}
               </span>
               <span className="flex-1 leading-snug">{option.text}</span>
               {isAnswered && option.isCorrect && (

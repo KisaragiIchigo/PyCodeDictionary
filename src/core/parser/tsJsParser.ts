@@ -1,327 +1,207 @@
+import { parse } from '@babel/parser';
 import { SymbolNode, CallEdge, PatternTag, ImportEntry } from '../../types';
-
-interface RawJsFunc {
-  id: string;
-  name: string;
-  kind: 'function' | 'method';
-  parentName?: string;
-  startLine: number;
-  endLine: number;
-  params: string[];
-  returnType?: string;
-  docstring?: string;
-  decorators?: string[];
-  isExported: boolean;
-  tags: PatternTag[];
-  bodyCode: string;
-  calls: string[];
-}
 
 export function parseTsJsCode(code: string): {
   symbols: SymbolNode[];
   callEdges: CallEdge[];
   imports: ImportEntry[];
 } {
-  const lines = code.split('\n');
   const symbols: SymbolNode[] = [];
-  const rawFuncs: RawJsFunc[] = [];
   const imports: ImportEntry[] = [];
-
-  let currentClass: string | null = null;
-  let accumulatedJSDoc: string | undefined = undefined;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const lineNum = i + 1;
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('//')) continue;
-
-    // 0. JSDoc コメントの蓄積 (/** ... */)
-    if (trimmed.startsWith('/**')) {
-      const docLines: string[] = [trimmed];
-      let endDocLine = i;
-      for (let k = i + 1; k < lines.length; k++) {
-        const nextLine = lines[k].trim();
-        docLines.push(nextLine);
-        if (nextLine.endsWith('*/')) {
-          endDocLine = k;
-          break;
-        }
-      }
-      accumulatedJSDoc = docLines
-        .join(' ')
-        .replace(/^\/\*\*|\*\/$/g, '')
-        .replace(/\s*\*\s*/g, ' ')
-        .trim();
-      i = endDocLine;
-      continue;
-    }
-
-    // 1. インポート文の抽出 (import { A, B } from 'C';)
-    const importMatch = trimmed.match(/^import\s+(?:type\s+)?(?:([A-Za-z0-9_]+)|\{([^}]+)\}|\*\s+as\s+([A-Za-z0-9_]+))\s+from\s+['"]([^'"]+)['"]/);
-    if (importMatch) {
-      const source = importMatch[4];
-      const defaultImport = importMatch[1];
-      const namedImports = importMatch[2] ? importMatch[2].split(',').map(s => s.trim().split(/\s+as\s+/)[0]) : [];
-      const nsImport = importMatch[3];
-
-      const importedSymbols = [
-        ...(defaultImport ? [defaultImport] : []),
-        ...namedImports,
-        ...(nsImport ? [nsImport] : [])
-      ];
-
-      const isStandardLib = !source.startsWith('.') && !source.startsWith('/');
-
-      imports.push({
-        source,
-        symbols: importedSymbols,
-        isStandardLib,
-        line: lineNum
-      });
-      continue;
-    }
-
-    // 2. Interface 定義
-    const ifaceMatch = trimmed.match(/^(?:export\s+)?interface\s+([A-Za-z0-9_]+)(?:<.*?>)?(?:\s+extends\s+([^{]+))?/);
-    if (ifaceMatch) {
-      const extendsClasses = ifaceMatch[2]
-        ? ifaceMatch[2].split(',').map(s => s.trim()).filter(Boolean)
-        : [];
-
-      symbols.push({
-        id: `iface-${ifaceMatch[1]}`,
-        name: ifaceMatch[1],
-        kind: 'interface',
-        startLine: lineNum,
-        endLine: lineNum,
-        docstring: accumulatedJSDoc,
-        extendsClasses,
-        isExported: trimmed.startsWith('export'),
-        tags: [],
-        calls: []
-      });
-      accumulatedJSDoc = undefined;
-      continue;
-    }
-
-    // 3. Type Alias
-    const typeMatch = trimmed.match(/^(?:export\s+)?type\s+([A-Za-z0-9_]+)(?:<.*?>)?\s*=/);
-    if (typeMatch) {
-      symbols.push({
-        id: `type-${typeMatch[1]}`,
-        name: typeMatch[1],
-        kind: 'type',
-        startLine: lineNum,
-        endLine: lineNum,
-        docstring: accumulatedJSDoc,
-        isExported: trimmed.startsWith('export'),
-        tags: [],
-        calls: []
-      });
-      accumulatedJSDoc = undefined;
-      continue;
-    }
-
-    // 4. Class 定義
-    const classMatch = trimmed.match(/^(?:export\s+)?(?:abstract\s+)?class\s+([A-Za-z0-9_]+)(?:<.*?>)?(?:\s+extends\s+([A-Za-z0-9_]+))?(?:\s+implements\s+([^{]+))?/);
-    if (classMatch) {
-      const className = classMatch[1];
-      const extendsClass = classMatch[2];
-      const implementsRaw = classMatch[3];
-      currentClass = className;
-
-      symbols.push({
-        id: `class-${className}`,
-        name: className,
-        kind: 'class',
-        startLine: lineNum,
-        endLine: lineNum,
-        docstring: accumulatedJSDoc,
-        extendsClasses: extendsClass ? [extendsClass] : [],
-        implementsInterfaces: implementsRaw ? implementsRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
-        isExported: trimmed.startsWith('export'),
-        tags: [],
-        calls: []
-      });
-      accumulatedJSDoc = undefined;
-      continue;
-    }
-
-    // 5. 関数 / メソッド定義
-    const funcMatch = line.match(/(?:export\s+)?(?:async\s+)?function(?:\s*\*|\s+)?([A-Za-z0-9_]+)?\s*(?:<.*?>)?\s*\((.*?)\)(?:\s*:\s*([^{]+))?/);
-    const arrowMatch = line.match(/(?:export\s+)?(?:const|let|var)\s+([A-Za-z0-9_]+)\s*=\s*(?:async\s*)?(?:\((.*?)\)|([A-Za-z0-9_]+))\s*(?::\s*([^{=]+))?\s*=>/);
-    const methodMatch = currentClass
-      ? line.match(/^\s*(?:public|private|protected|static|async)*\s*([A-Za-z0-9_]+)\s*(?:<.*?>)?\s*\((.*?)\)(?:\s*:\s*([^{]+))?\s*\{?/)
-      : null;
-
-    let isFunc = false;
-    let funcName = '';
-    let isAsync = line.includes('async ');
-    let isGenerator = line.includes('function*') || line.includes('yield ');
-    let paramsRaw = '';
-    let returnType: string | undefined = undefined;
-    let isMethod = false;
-
-    if (funcMatch && funcMatch[1]) {
-      isFunc = true;
-      funcName = funcMatch[1];
-      paramsRaw = funcMatch[2] || '';
-      returnType = funcMatch[3]?.trim();
-    } else if (arrowMatch) {
-      isFunc = true;
-      funcName = arrowMatch[1];
-      paramsRaw = arrowMatch[2] || arrowMatch[3] || '';
-      returnType = arrowMatch[4]?.trim();
-    } else if (methodMatch && methodMatch[1] && !['if', 'for', 'while', 'switch', 'catch'].includes(methodMatch[1])) {
-      isFunc = true;
-      isMethod = true;
-      funcName = methodMatch[1];
-      paramsRaw = methodMatch[2] || '';
-      returnType = methodMatch[3]?.trim();
-    }
-
-    if (isFunc && funcName) {
-      const params = paramsRaw.split(',').map(p => p.trim()).filter(Boolean);
-      const symbolId = isMethod && currentClass ? `${currentClass}.${funcName}` : funcName;
-
-      let endLine = lineNum;
-      const bodyLines: string[] = [];
-      let depth = 0;
-      let started = false;
-
-      for (let j = i; j < lines.length; j++) {
-        const cur = lines[j];
-        bodyLines.push(cur);
-        for (const char of cur) {
-          if (char === '{') {
-            depth++;
-            started = true;
-          } else if (char === '}') {
-            depth--;
-          }
-        }
-        if (started && depth <= 0) {
-          endLine = j + 1;
-          break;
-        }
-        endLine = j + 1;
-      }
-
-      const bodyCode = bodyLines.join('\n');
-      const tags: PatternTag[] = [];
-      if (isAsync || /await\s+/.test(bodyCode)) tags.push('async');
-      if (isGenerator) tags.push('generator');
-
-      if (/fetch\(|axios\.|useQuery|useMutation|WebSocket|new Request\(|http:\/\//.test(bodyCode)) {
-        tags.push('net');
-      }
-
-      if (/fs\.|readFile|writeFile|localStorage|sessionStorage|indexedDB|FileReader/.test(bodyCode)) {
-        tags.push('io');
-      }
-
-      if (new RegExp(`\\b${funcName}\\s*\\(`).test(bodyCode)) {
-        tags.push('recursive');
-      }
-
-      if (/useMemo\(|useCallback\(/.test(bodyCode)) {
-        tags.push('memoized');
-      }
-
-      rawFuncs.push({
-        id: symbolId,
-        name: isMethod && currentClass ? `${currentClass}.${funcName}` : funcName,
-        kind: isMethod ? 'method' : 'function',
-        parentName: isMethod && currentClass ? currentClass : undefined,
-        startLine: lineNum,
-        endLine,
-        params,
-        returnType,
-        docstring: accumulatedJSDoc,
-        isExported: trimmed.startsWith('export'),
-        tags,
-        bodyCode,
-        calls: []
-      });
-
-      accumulatedJSDoc = undefined;
-    }
-  }
-
-  // 呼び出し関係の解決
-  const shortNamesToFull = new Map<string, string[]>();
-  for (const f of rawFuncs) {
-    const short = f.name.includes('.') ? f.name.split('.').pop()! : f.name;
-    const list = shortNamesToFull.get(short) || [];
-    list.push(f.name);
-    shortNamesToFull.set(short, list);
-  }
-
   const callEdgesMap = new Map<string, CallEdge>();
 
-  for (const caller of rawFuncs) {
-    const callerLines = caller.bodyCode.split('\n');
+  try {
+    const plugins: any[] = [
+      'typescript',
+      'jsx',
+      ['decorators', { decoratorsBeforeExport: true }]
+    ];
 
-    for (let idx = 0; idx < callerLines.length; idx++) {
-      const curLineText = callerLines[idx];
-      const curLineNum = caller.startLine + idx;
+    const ast = parse(code, {
+      sourceType: 'unambiguous',
+      plugins,
+      errorRecovery: true
+    });
 
-      for (const [shortName, fullNames] of shortNamesToFull.entries()) {
-        const callRegex = new RegExp(`(?:this\\.|\\b)${shortName}\\s*\\(`, 'g');
-        if (callRegex.test(curLineText)) {
-          for (const targetFullName of fullNames) {
-            if (!caller.calls.includes(targetFullName)) {
-              caller.calls.push(targetFullName);
+    const definedFunctions = new Map<string, { startLine: number; endLine: number; node: any }>();
+    const funcCalls = new Map<string, { target: string; line: number }[]>();
+
+    const traverse = (node: any, currentClass: string | null = null, currentFunction: string | null = null) => {
+      if (!node || typeof node !== 'object') return;
+
+      const line = node.loc ? node.loc.start.line : 1;
+      const endLine = node.loc ? node.loc.end.line : line;
+
+      if (node.type === 'ImportDeclaration') {
+        const source = node.source?.value || '';
+        const importedSymbols: string[] = [];
+        if (node.specifiers) {
+          for (const spec of node.specifiers) {
+            if (spec.imported?.name) importedSymbols.push(spec.imported.name);
+            else if (spec.local?.name) importedSymbols.push(spec.local.name);
+          }
+        }
+        imports.push({
+          source,
+          symbols: importedSymbols,
+          isStandardLib: !source.startsWith('.') && !source.startsWith('/'),
+          line
+        });
+        return;
+      }
+
+      if (node.type === 'ClassDeclaration' && node.id?.name) {
+        const className = node.id.name;
+        const extendsClass = node.superClass?.name;
+        symbols.push({
+          id: `class-${className}`,
+          name: className,
+          kind: 'class',
+          startLine: line,
+          endLine,
+          extendsClasses: extendsClass ? [extendsClass] : [],
+          tags: [],
+          calls: []
+        });
+
+        if (node.body?.body) {
+          for (const member of node.body.body) {
+            traverse(member, className, currentFunction);
+          }
+        }
+        return;
+      }
+
+      let funcName: string | null = null;
+      let isMethod = false;
+      let isAsync = !!node.async;
+      let isGenerator = !!node.generator;
+      let params: string[] = [];
+
+      if (node.type === 'FunctionDeclaration' && node.id?.name) {
+        funcName = node.id.name;
+      } else if (node.type === 'ClassMethod' && node.key?.name) {
+        funcName = currentClass ? `${currentClass}.${node.key.name}` : node.key.name;
+        isMethod = true;
+      } else if (node.type === 'VariableDeclarator' && node.id?.name && (node.init?.type === 'ArrowFunctionExpression' || node.init?.type === 'FunctionExpression')) {
+        funcName = node.id.name;
+        isAsync = !!node.init.async;
+        isGenerator = !!node.init.generator;
+        node = node.init;
+      }
+
+      if (funcName) {
+        if (node.params) {
+          params = node.params.map((p: any) => p.name || (p.left?.name) || 'param');
+        }
+
+        const tags: PatternTag[] = [];
+        if (isAsync) tags.push('async');
+        if (isGenerator) tags.push('generator');
+
+        const funcKey = funcName;
+        definedFunctions.set(funcKey, { startLine: line, endLine, node });
+        funcCalls.set(funcKey, []);
+
+        const inspectBody = (subNode: any) => {
+          if (!subNode || typeof subNode !== 'object') return;
+
+          if (subNode.type === 'CallExpression') {
+            let calleeName: string | null = null;
+            if (subNode.callee?.name) {
+              calleeName = subNode.callee.name;
+            } else if (subNode.callee?.property?.name) {
+              calleeName = subNode.callee.property.name;
             }
 
-            const edgeKey = `${caller.name}->${targetFullName}`;
-            if (!callEdgesMap.has(edgeKey)) {
-              callEdgesMap.set(edgeKey, {
-                id: `edge-${edgeKey}`,
-                source: caller.name,
-                target: targetFullName,
-                sourceName: caller.name,
-                targetName: targetFullName,
-                count: 1,
-                lines: [curLineNum]
-              });
-            } else {
-              const existing = callEdgesMap.get(edgeKey)!;
-              existing.count += 1;
-              if (!existing.lines.includes(curLineNum)) {
-                existing.lines.push(curLineNum);
+            if (calleeName) {
+              const callLine = subNode.loc ? subNode.loc.start.line : line;
+              funcCalls.get(funcKey)?.push({ target: calleeName, line: callLine });
+
+              if (calleeName === 'fetch' || calleeName === 'axios' || calleeName === 'useQuery') {
+                if (!tags.includes('net')) tags.push('net');
+              }
+              if (calleeName.startsWith('read') || calleeName.startsWith('write') || calleeName === 'readFile') {
+                if (!tags.includes('io')) tags.push('io');
+              }
+              if (calleeName === funcName || calleeName === funcName.split('.').pop()) {
+                if (!tags.includes('recursive')) tags.push('recursive');
               }
             }
           }
+
+          for (const k of Object.keys(subNode)) {
+            if (k === 'loc' || k === 'start' || k === 'end') continue;
+            const child = subNode[k];
+            if (Array.isArray(child)) {
+              for (const c of child) inspectBody(c);
+            } else if (child && typeof child === 'object') {
+              inspectBody(child);
+            }
+          }
+        };
+
+        if (node.body) inspectBody(node.body);
+
+        symbols.push({
+          id: funcKey,
+          name: funcKey,
+          kind: isMethod ? 'method' : 'function',
+          parentName: currentClass || undefined,
+          startLine: line,
+          endLine,
+          parameters: params,
+          tags,
+          calls: []
+        });
+
+        return;
+      }
+
+      for (const k of Object.keys(node)) {
+        if (k === 'loc' || k === 'start' || k === 'end') continue;
+        const child = node[k];
+        if (Array.isArray(child)) {
+          for (const c of child) traverse(c, currentClass, currentFunction);
+        } else if (child && typeof child === 'object') {
+          traverse(child, currentClass, currentFunction);
+        }
+      }
+    };
+
+    traverse(ast.program);
+
+    for (const [callerName, calls] of funcCalls.entries()) {
+      const callerSym = symbols.find(s => s.name === callerName);
+
+      for (const call of calls) {
+        let targetSym = symbols.find(s => s.name === call.target || s.name.endsWith(`.${call.target}`));
+        if (targetSym) {
+          if (callerSym && !callerSym.calls.includes(targetSym.name)) {
+            callerSym.calls.push(targetSym.name);
+          }
+
+          const edgeKey = `${callerName}->${targetSym.name}`;
+          if (!callEdgesMap.has(edgeKey)) {
+            callEdgesMap.set(edgeKey, {
+              id: `edge-${edgeKey}`,
+              source: callerName,
+              target: targetSym.name,
+              sourceName: callerName,
+              targetName: targetSym.name,
+              count: 1,
+              lines: [call.line]
+            });
+          } else {
+            const edge = callEdgesMap.get(edgeKey)!;
+            edge.count++;
+            if (!edge.lines.includes(call.line)) edge.lines.push(call.line);
+          }
         }
       }
     }
-
-    symbols.push({
-      id: caller.id,
-      name: caller.name,
-      kind: caller.kind,
-      parentName: caller.parentName,
-      startLine: caller.startLine,
-      endLine: caller.endLine,
-      parameters: caller.params,
-      returnType: caller.returnType,
-      docstring: caller.docstring,
-      isExported: caller.isExported,
-      tags: caller.tags,
-      calls: caller.calls
-    });
-  }
-
-  // クラスの endLine を調整
-  for (const sym of symbols) {
-    if (sym.kind === 'class') {
-      const childMethods = symbols.filter(s => s.parentName === sym.name);
-      if (childMethods.length > 0) {
-        sym.endLine = Math.max(...childMethods.map(m => m.endLine));
-      }
-    }
+  } catch (err) {
+    console.warn('AST parse failed in tsJsParser:', err);
   }
 
   return {
