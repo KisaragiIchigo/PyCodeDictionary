@@ -2,8 +2,10 @@ import { ASTNode } from '../../types/ast';
 import { SupportedLanguage } from '../../types';
 import { buildPythonAST } from './pythonAstBuilder';
 import { buildTsJsAST } from './tsJsAstBuilder';
+import { getTreeSitterParser, convertTreeSitterNodeToAST } from './treeSitterEngine';
 
 export function parseToAST(code: string, language: SupportedLanguage): ASTNode {
+  // 1. 各言語の標準パーサー（Babel / Python Lexer+Recursive Parser）
   switch (language) {
     case 'python':
       return buildPythonAST(code);
@@ -11,9 +13,26 @@ export function parseToAST(code: string, language: SupportedLanguage): ASTNode {
     case 'javascript':
       return buildTsJsAST(code);
     default:
-      // Rust, Go, C++, SQL 等向けの汎用ASTビルダー
       return buildGenericAST(code, language);
   }
+}
+
+// Tree-sitter WASM による完全な非同期 AST 解析（Tree-sitter 優先）
+export async function parseToASTAsync(code: string, language: SupportedLanguage): Promise<ASTNode> {
+  try {
+    const parser = await getTreeSitterParser(language);
+    if (parser) {
+      const tree = parser.parse(code);
+      if (tree && tree.rootNode) {
+        return convertTreeSitterNodeToAST(tree.rootNode, code);
+      }
+    }
+  } catch (err) {
+    console.warn(`Tree-sitter async parse error for ${language}, falling back:`, err);
+  }
+
+  // フォールバック
+  return parseToAST(code, language);
 }
 
 function buildGenericAST(code: string, language: SupportedLanguage): ASTNode {
@@ -42,7 +61,6 @@ function buildGenericAST(code: string, language: SupportedLanguage): ASTNode {
       continue;
     }
 
-    // 関数/構造体/マクロの判定
     let type = 'Statement';
     let category: ASTNode['category'] = 'statement';
 

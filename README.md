@@ -1,17 +1,18 @@
 # CodeDictionary Studio (PyDic v2.0)
 
-**多言語AST解析・自律DAGコールグラフ・実行シミュレータ・インテリジェントコード辞書・Big-O計算量診断・アーキテクチャ設計スタジオを備えた次世代コード解析環境**
+**Tree-sitter WASM多言語構文解析・自律DAGコールグラフ・実行シミュレータ・インテリジェントコード辞書・Big-O計算量診断・アーキテクチャ設計スタジオを備えた次世代コード解析環境**
 
 PythonのAST解析・Graphviz可視化ツールであった `PyDic` をフルスタックで全面刷新。  
-Pythonに限らず **TypeScript, JavaScript, Rust, Go, C++, SQL, HTML/CSS** などの主要言語をまるごと解析し、外部ツールのインストール不要でブラウザやデスクトップEXE（ポータブル & インストーラー）として瞬時にインタラクティブなフローチャート・AST構文木・コード辞書・実行シミュレーション・リファクタ提案を提供します。
+GitHubやNeovim、VS Code等の世界最高峰エディタが採用する **Tree-sitter (web-tree-sitter / WASM)** を公式統合。  
+**Python, TypeScript, JavaScript, Rust, Go, C++, SQL, HTML/CSS, Shell** などの主要言語をまるごと超高精度・エラー耐性（Error-tolerant）付きで解析し、外部ツールのインストール不要でブラウザやデスクトップEXE（ポータブル & インストーラー）として瞬時にインタラクティブなフローチャート・AST構文木・コード辞書・実行シミュレーション・リファクタ提案を提供します。
 
 ---
 
 ## 🌟 主な機能と特長
 
-1. **多言語AST（抽象構文木）解析 & インタラクティブASTエクスプローラー**:
-   - **本物のASTパーサーエンジン**: Python, TypeScript/JavaScript, Rust, Go, C++等の抽象構文木を再帰的に生成
-   - **双方向ツリー連動**: サイドバーの「🌳 AST構文木」からノード（`FunctionDef`, `ClassDef`, `CallExpression` 等）をクリックすると、エディタ上の該当トークン・行へ瞬時にジャンプ＆ネオン発光
+1. **Tree-sitter WASM 多言語構文解析 & インタラクティブASTエクスプローラー**:
+   - **世界標準の Tree-sitter WASM エンジン**: Python, TypeScript, JavaScript, Rust, Go, C++, Bash 等の公式文法 WebAssembly バイナリを完全搭載。タイポや構文エラーがあっても壊れずに部分解析を完遂する圧倒的な堅牢性（Error-tolerant）を実現
+   - **双方向ツリー連動**: サイドバーの「🌳 AST構文木」からノード（`function_definition`, `class_definition`, `call_expression` 等）をクリックすると、エディタ上の該当トークン・行へ瞬時にジャンプ＆ネオン発光
    - **ASTノード・インスペクター & 構文辞書**: 選択中ノードの引数・戻り値型・演算子・開始終了位置と、コンパイラ/静的解析における役割を詳細解説
 2. **超進化型インタラクティブ・コールグラフ (DAG)**:
    - **カーソル中心のスムーズズーム & パン**: 0.25倍〜2.5倍まで無段階ズーム、全体Fit

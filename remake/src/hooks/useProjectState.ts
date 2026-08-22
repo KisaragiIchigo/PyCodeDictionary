@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   SupportedLanguage,
   AnalysisResult,
   ProjectAnalysisResult,
   ProjectFileEntry
 } from '../types';
-import { runFullAnalysis } from '../core/analyzer';
+import { runFullAnalysis, runFullAnalysisAsync } from '../core/analyzer';
 import { analyzeProject, isCodeFile, isIgnoredPath } from '../core/multiFile/projectScanner';
 import { sampleCodePresets } from '../core/presets/sampleCodes';
 
@@ -34,9 +34,17 @@ export function useProjectState() {
   );
 
   const executeAnalysis = useCallback((sourceCode: string, name: string, lang?: SupportedLanguage) => {
-    const res = runFullAnalysis(sourceCode, name, lang);
-    setAnalysis(res);
-    setLanguage(res.language);
+    // 1. 同期パーサーによる即時レスポンス
+    const syncRes = runFullAnalysis(sourceCode, name, lang);
+    setAnalysis(syncRes);
+    setLanguage(syncRes.language);
+
+    // 2. Tree-sitter WASM による非同期超高精度解析（利用可能な場合）
+    runFullAnalysisAsync(sourceCode, name, lang).then(asyncRes => {
+      setAnalysis(asyncRes);
+    }).catch(err => {
+      console.warn('Tree-sitter background analysis error:', err);
+    });
   }, []);
 
   const handleLoadPreset = useCallback((presetId: string) => {
