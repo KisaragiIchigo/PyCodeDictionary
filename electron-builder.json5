@@ -7,6 +7,8 @@
   "productName": "CodeDictionary Studio",
   "copyright": "Copyright © 2026 CodeDictionary Studio",
   "publish": null,
+  "npmRebuild": false,
+  "nodeGypRebuild": false,
   "directories": {
     "output": "release",
     "buildResources": "build"
