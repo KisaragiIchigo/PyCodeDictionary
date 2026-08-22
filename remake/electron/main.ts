@@ -1,7 +1,7 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 // キャッシュロック・GPUキャッシュ競合エラーの回避
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
@@ -10,11 +10,11 @@ app.commandLine.appendSwitch('no-sandbox');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ディレクトリ構造の解決
-const distPath = path.join(__dirname, '../dist');
+// ディレクトリ構造の解決（app.getAppPath() を基点にするのが一番確実）
+const distPath = path.join(app.getAppPath(), 'dist');
 const publicPath = app.isPackaged
   ? distPath
-  : path.join(distPath, '../public');
+  : path.join(app.getAppPath(), 'public');
 
 process.env.DIST = distPath;
 process.env.VITE_PUBLIC = publicPath;
@@ -36,12 +36,17 @@ if (!gotTheLock) {
 }
 
 function getPreloadPath(): string {
-  const mjsPath = path.join(__dirname, 'preload.mjs');
+  const mjsPath = path.join(app.getAppPath(), 'dist-electron', 'preload.mjs');
   if (fs.existsSync(mjsPath)) return mjsPath;
-  const jsPath = path.join(__dirname, 'preload.js');
+  const jsPath = path.join(app.getAppPath(), 'dist-electron', 'preload.js');
   if (fs.existsSync(jsPath)) return jsPath;
-  return mjsPath;
+  return path.join(__dirname, 'preload.mjs');
 }
+
+// セキュリティ無効化とカスタムプロトコルを許可するためのスキーム登録
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { secure: true, standard: true, supportFetchAPI: true, bypassCSP: true } }
+]);
 
 function createWindow() {
   const iconPath = app.isPackaged
@@ -66,26 +71,30 @@ function createWindow() {
   });
 
   win.setMenuBarVisibility(false);
+  
+  // デバッグ用: DEVTOOLS を開く
+  win.webContents.openDevTools();
+
+  // 画面のエラーをNode.jsコンソールへ転送
+  win.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Browser Console] ${message} (line: ${line})`);
+  });
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL).catch(() => {
       if (fs.existsSync(path.join(distPath, 'index.html'))) {
-        win?.loadFile(path.join(distPath, 'index.html'));
+        win?.loadURL('app://-/index.html');
       }
     });
   } else {
-    const indexPath = path.join(distPath, 'index.html');
-    win.loadFile(indexPath).catch((err) => {
-      console.error('[Electron] Failed to load index.html:', err);
+    win.loadURL('app://-/index.html').catch((err) => {
+      console.error('[Electron] Failed to load index.html via app:// protocol:', err);
     });
   }
 
   win.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
     console.error(`[Electron] Page failed to load (${errorCode}): ${errorDescription}`);
-    const fallbackPath = path.join(distPath, 'index.html');
-    if (fs.existsSync(fallbackPath) && win) {
-      win.loadFile(fallbackPath);
-    }
+    if (win) win.loadURL('app://-/index.html');
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -113,6 +122,46 @@ app.on('activate', () => {
 });
 
 app.whenReady().then(() => {
+  // カスタムプロトコル app:// を登録（Chromium のマルチバイト文字パスバグを回避）
+  protocol.handle('app', async (request) => {
+    let url = request.url.replace(/^app:\/\/-/, '');
+    // URLデコードしてクエリパラメータを削除
+    try { url = decodeURI(url); } catch (e) {}
+    if (url.includes('?')) url = url.split('?')[0];
+    if (url.includes('#')) url = url.split('#')[0];
+    
+    // dist パスから絶対パスを生成
+    let absolutePath = path.join(distPath, url);
+    // パスが '/' の場合は index.html を返す
+    if (url === '/' || url === '' || url === '\\') {
+      absolutePath = path.join(distPath, 'index.html');
+    }
+
+    try {
+      // net.fetch の代わりに Node.js の fs で直接読み込むことで
+      // マルチバイト文字パス(★など)による Chromium の ERR_FAILED バグを回避
+      const data = await fs.promises.readFile(absolutePath);
+      
+      // 拡張子から簡易的な MIME タイプを判定
+      const ext = path.extname(absolutePath).toLowerCase();
+      let mimeType = 'text/plain';
+      if (ext === '.html') mimeType = 'text/html; charset=utf-8';
+      else if (ext === '.js' || ext === '.mjs') mimeType = 'text/javascript';
+      else if (ext === '.css') mimeType = 'text/css';
+      else if (ext === '.json') mimeType = 'application/json';
+      else if (ext === '.wasm') mimeType = 'application/wasm';
+      else if (ext === '.png') mimeType = 'image/png';
+      else if (ext === '.svg') mimeType = 'image/svg+xml';
+      
+      return new Response(data, {
+        headers: { 'Content-Type': mimeType }
+      });
+    } catch (err) {
+      console.error(`[Protocol] Failed to read file: ${absolutePath}`, err);
+      return new Response('Not Found', { status: 404 });
+    }
+  });
+
   ipcMain.handle('app:get-version', () => app.getVersion());
 
   ipcMain.handle('dialog:open-file', async (_event, options) => {
