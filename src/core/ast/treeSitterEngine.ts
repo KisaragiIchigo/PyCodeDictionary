@@ -21,6 +21,17 @@ let initPromise: Promise<void> | null = null;
 const languageCache = new Map<SupportedLanguage, Language>();
 const parserCache = new Map<SupportedLanguage, Parser>();
 
+// WASM パス解決（ブラウザ / Electron / Vite 本番環境対応）
+function getWasmPath(fileName: string): string {
+  if (typeof window !== 'undefined' && window.location) {
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    const base = pathname.endsWith('/') ? pathname : pathname.substring(0, pathname.lastIndexOf('/') + 1);
+    return `${origin}${base}tree-sitter/${fileName}`;
+  }
+  return `/tree-sitter/${fileName}`;
+}
+
 export async function initTreeSitter(): Promise<void> {
   if (isInitialized) return;
   if (initPromise) return initPromise;
@@ -29,7 +40,7 @@ export async function initTreeSitter(): Promise<void> {
     try {
       await Parser.init({
         locateFile(scriptName: string, _scriptDirectory: string) {
-          return `/tree-sitter/${scriptName}`;
+          return getWasmPath(scriptName);
         }
       });
       isInitialized = true;
@@ -55,7 +66,8 @@ export async function getTreeSitterParser(language: SupportedLanguage): Promise<
   try {
     let lang = languageCache.get(language);
     if (!lang) {
-      lang = await Language.load(`/tree-sitter/${wasmFile}`);
+      const wasmUrl = getWasmPath(wasmFile);
+      lang = await Language.load(wasmUrl);
       languageCache.set(language, lang);
     }
 
@@ -86,7 +98,6 @@ export function convertTreeSitterNodeToAST(node: Node, code: string): ASTNode {
   const textSnippet = code.slice(node.startIndex, node.endIndex);
   let label = type;
 
-  // ラベルの見やすさ向上
   if (node.childForFieldName('name')) {
     const nameNode = node.childForFieldName('name')!;
     label = `${type}: ${code.slice(nameNode.startIndex, nameNode.endIndex)}`;
@@ -122,7 +133,7 @@ export function convertTreeSitterNodeToAST(node: Node, code: string): ASTNode {
   };
 }
 
-// Tree-sitter による超高精度シンボル & 呼び出し抽出
+// 言語別 Tree-sitter 構文木シンボル & 呼出抽出エンジン
 export function extractSymbolsFromTreeSitter(
   root: Node,
   code: string,
@@ -142,27 +153,37 @@ export function extractSymbolsFromTreeSitter(
     const endLine = node.endPosition.row + 1;
 
     // 1. インポートの抽出
-    if (type.includes('import') || type.includes('use_declaration') || type.includes('include_statement')) {
-      const importText = code.slice(node.startIndex, node.endIndex);
+    if (
+      type === 'import_statement' ||
+      type === 'import_from_statement' ||
+      type === 'use_declaration' ||
+      type === 'import_declaration' ||
+      type === 'preproc_include'
+    ) {
+      const importText = code.slice(node.startIndex, node.endIndex).trim();
       imports.push({
-        source: importText.slice(0, 40),
-        symbols: [importText.slice(0, 30)],
+        source: importText.slice(0, 50),
+        symbols: [importText.slice(0, 35)],
         isStandardLib: !importText.startsWith('.') && !importText.startsWith('/'),
         line: startLine
       });
+      return;
     }
 
     // 2. クラス / 構造体 / インターフェース / トレイトの抽出
     if (
       type === 'class_definition' ||
       type === 'class_declaration' ||
+      type === 'class_specifier' ||
       type === 'struct_item' ||
+      type === 'struct_specifier' ||
       type === 'type_declaration' ||
-      type === 'trait_item'
+      type === 'trait_item' ||
+      type === 'interface_declaration'
     ) {
       const nameNode = node.childForFieldName('name') || node.children.find((c: Node) => c.type.includes('identifier'));
-      const name = nameNode ? code.slice(nameNode.startIndex, nameNode.endIndex) : 'AnonymousClass';
-      const kind = type.includes('struct') ? 'struct' : type.includes('trait') || type.includes('interface') ? 'interface' : 'class';
+      const name = nameNode ? code.slice(nameNode.startIndex, nameNode.endIndex) : 'Class';
+      const kind = (type.includes('struct')) ? 'struct' : (type.includes('trait') || type.includes('interface')) ? 'interface' : 'class';
 
       symbols.push({
         id: `class-${name}`,
@@ -174,7 +195,6 @@ export function extractSymbolsFromTreeSitter(
         calls: []
       });
 
-      // 子要素の走査
       for (let i = 0; i < node.namedChildCount; i++) {
         visit(node.namedChild(i)!, name, currentFunction);
       }
@@ -233,7 +253,6 @@ export function extractSymbolsFromTreeSitter(
           calls: []
         });
 
-        // 関数本体の走査
         for (let i = 0; i < node.namedChildCount; i++) {
           visit(node.namedChild(i)!, currentParent, fullName);
         }
@@ -259,7 +278,6 @@ export function extractSymbolsFromTreeSitter(
       }
     }
 
-    // 子ノード走査
     for (let i = 0; i < node.namedChildCount; i++) {
       visit(node.namedChild(i)!, currentParent, currentFunction);
     }
@@ -270,21 +288,22 @@ export function extractSymbolsFromTreeSitter(
   // 呼び出しグラフの解決
   const callEdgesMap = new Map<string, CallEdge>();
   for (const call of rawCalls) {
-    const callerSym = symbols.find(s => s.name === call.caller);
+    const callerSym = symbols.find(s => s.name === call.caller || s.name.endsWith(`.${call.caller}`));
     let targetSym = symbols.find(s => s.name === call.target || s.name.endsWith(`.${call.target}`) || s.name.endsWith(`::${call.target}`));
 
     if (targetSym) {
+      const callerName = callerSym ? callerSym.name : call.caller;
       if (callerSym && !callerSym.calls.includes(targetSym.name)) {
         callerSym.calls.push(targetSym.name);
       }
 
-      const edgeKey = `${call.caller}->${targetSym.name}`;
+      const edgeKey = `${callerName}->${targetSym.name}`;
       if (!callEdgesMap.has(edgeKey)) {
         callEdgesMap.set(edgeKey, {
           id: `edge-${edgeKey}`,
-          source: call.caller,
+          source: callerName,
           target: targetSym.name,
-          sourceName: call.caller,
+          sourceName: callerName,
           targetName: targetSym.name,
           count: 1,
           lines: [call.line]

@@ -34,16 +34,25 @@ export function useProjectState() {
   );
 
   const executeAnalysis = useCallback((sourceCode: string, name: string, lang?: SupportedLanguage) => {
-    // 1. 同期パーサーによる即時レスポンス
+    // 1. 即時レスポンス（UIのフリーズ防止）
     const syncRes = runFullAnalysis(sourceCode, name, lang);
     setAnalysis(syncRes);
     setLanguage(syncRes.language);
 
-    // 2. Tree-sitter WASM による非同期超高精度解析（利用可能な場合）
+    // 2. Tree-sitter WASM による世界最高峰のS-expression Query解析を非同期で適用
     runFullAnalysisAsync(sourceCode, name, lang).then(asyncRes => {
       setAnalysis(asyncRes);
     }).catch(err => {
-      console.warn('Tree-sitter background analysis error:', err);
+      console.warn('Tree-sitter analysis error:', err);
+    });
+  }, []);
+
+  // 起動時の初期コードを Tree-sitter WASM でパース
+  useEffect(() => {
+    runFullAnalysisAsync(defaultPreset.code, defaultPreset.fileName, defaultPreset.language).then(asyncRes => {
+      setAnalysis(asyncRes);
+    }).catch(err => {
+      console.warn('Initial Tree-sitter boot parse:', err);
     });
   }, []);
 
@@ -123,8 +132,9 @@ export function useProjectState() {
       setLanguage(firstFile.language);
       setCode(firstFile.code);
       setAnalysis(firstFile.analysis);
+      executeAnalysis(firstFile.code, firstFile.name, firstFile.language);
     }
-  }, []);
+  }, [executeAnalysis]);
 
   const handleSelectProjectFile = useCallback((file: ProjectFileEntry) => {
     setFileName(file.name);
@@ -134,7 +144,8 @@ export function useProjectState() {
     setTargetLine(null);
     setAnalysis(file.analysis);
     setIsProjectMode(false);
-  }, []);
+    executeAnalysis(file.code, file.name, file.language);
+  }, [executeAnalysis]);
 
   const handleApplyRefactor = useCallback((newCodeOrBefore?: string, codeAfter?: string) => {
     if (codeAfter && newCodeOrBefore) {
